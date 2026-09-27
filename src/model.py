@@ -90,7 +90,8 @@ class FlexibleConsumerModel:
         that ``solve()`` can return the primal and dual values automatically.
         """
         d, m, T = self.data, self.m, self.T
-
+        price_import = d.energy_price + d.import_tariff
+        price_export = d.energy_price - d.export_tariff
         # --- Decision variables --------------------------------------------------------
         # TODO: identify and declare the decision variables of your formulation.
         # Store every variable family in self.var["<name>"]: solve() then returns its hourly
@@ -109,10 +110,32 @@ class FlexibleConsumerModel:
         # * naming the families "import", "export", "load", "pv" makes the standard plots of
         #   src/plotting.py work out of the box.
 
+        for name in ("load", "pv", "import", "export"):
+            self.var[name] = m.addVars(
+                T, lb=-GRB.INFINITY, vtype=GRB.CONTINUOUS, name=name
+            )
+        load = self.var["load"]
+        pv = self.var["pv"]
+        imports = self.var["import"]
+        exports = self.var["export"]
+
         # --- Objective ---------------------------------------------------------------
         # TODO: express the objective function and its direction (GRB.MINIMIZE or GRB.MAXIMIZE):
         #   m.setObjective(gp.quicksum(<expression in t> for t in T), <direction>)
         # The input-data attributes (with units) are documented in src/data_loader.py (InputData).
+
+        # Consumption utility - PV cost - import expenditure + export revenue.
+        m.setObjective(
+            gp.quicksum(
+                    d.consumption_utility * load[t]
+                    - d.pv_marginal_cost * pv[t]
+                    - price_import[t] * imports[t]
+                    + price_export[t] * exports[t]
+                for t in T),
+                GRB.MAXIMIZE,
+        )
+
+
 
         # --- Constraints -------------------------------------------------------------
         # TODO: add the constraints of your formulation.
@@ -122,6 +145,34 @@ class FlexibleConsumerModel:
         #       (<lhs expression> - <rhs expression> <= 0 for t in T), name="<name>")
         # Pattern for a single constraint (dual returned as a scalar):
         #   self.con["<name>"] = m.addConstr(<lhs expression> - <rhs expression> <= 0, name="<name>")
+        self.con["balance"] = m.addConstrs(
+            (load[t] + exports[t] - imports[t] - pv[t] == 0 for t in T),
+            name="balance",
+        )
+
+        self.con["load_lower"] = m.addConstrs(
+            (-load[t] <= -d.load_min_kWh for t in T), name="load_lower"
+        )
+
+        self.con["load_upper"] = m.addConstrs(
+            (load[t] <= d.load_max_kWh for t in T), name="load_upper"
+        )
+
+        self.con["pv_lower"] = m.addConstrs(
+            (-pv[t] <= 0 for t in T), name="pv_lower"
+        )
+
+        self.con["pv_upper"] = m.addConstrs(
+            (pv[t] <= d.pv_available[t] for t in T), name="pv_upper"
+        )
+
+        self.con["export_lower"] = m.addConstrs(
+            (-exports[t] <= 0 for t in T), name="export_lower"
+        )
+
+        self.con["import_lower"] = m.addConstrs(
+            (-imports[t] <= 0 for t in T), name="import_lower"
+        )
 
         m.update()
         return self
@@ -168,13 +219,39 @@ class FlexibleConsumerModel:
                 # No duals available (e.g. model with integer variables)
                 pass
 
+        meta = {"scalar_variables": scalars}
+        # Q1 financial breakdown
+        if d.consumption_utility is not None:
+            price_import = d.energy_price + d.import_tariff
+            price_export = d.energy_price - d.export_tariff
+
+            hourly["utility_DKK"] = d.consumption_utility * hourly["load"]
+            hourly["pv_cost_DKK"] = d.pv_marginal_cost * hourly["pv"]
+            hourly["import_cost_DKK"] = price_import * hourly["import"]
+            hourly["export_revenue_DKK"] = price_export * hourly["export"]
+            hourly["net_procurement_cost_DKK"] = (
+                hourly["pv_cost_DKK"] + hourly["import_cost_DKK"]
+                - hourly["export_revenue_DKK"]
+            )
+            hourly["surplus_DKK"] = (
+                hourly["utility_DKK"] - hourly["net_procurement_cost_DKK"]
+            )
+            financial_columns = [
+                "utility_DKK", "pv_cost_DKK", "import_cost_DKK",
+                "export_revenue_DKK", "net_procurement_cost_DKK", "surplus_DKK",
+            ]
+            meta["financial_breakdown"] = {
+                name: float(hourly[name].sum()) for name in financial_columns
+            }
+
+
         return Results(
             question=d.question,
             status=status,
             objective=self.m.ObjVal,
             hourly=hourly,
             duals=duals,
-            meta={"scalar_variables": scalars},
+            meta=meta,
         )
 
 

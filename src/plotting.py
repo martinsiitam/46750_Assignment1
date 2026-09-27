@@ -63,7 +63,7 @@ def plot_schedule(results: Results, data: InputData, save_to: Path | str | None 
     if "reference_load" in hr:
         ax.step(h, hr["reference_load"], where="mid", color="C0", ls=":", label="reference load")
     ax.axhline(0, color="grey", lw=0.8)
-    ax.set(xlabel="hour", ylabel="kWh/h", title=f"Optimal schedule - {results.question} (cost {results.objective:.1f} DKK)")
+    ax.set(xlabel="hour", ylabel="kWh/h", title=f"Optimal schedule - {results.question} (surplus {results.objective:.1f} DKK)")
 
     ax2 = ax.twinx()
     ax2.step(h, hr["price"], where="mid", color="C3", lw=1.2, label="energy price")

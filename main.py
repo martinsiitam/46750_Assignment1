@@ -30,6 +30,27 @@ def run_base_case(question: str, out: Path, show: bool) -> Results | None:
     model = FlexibleConsumerModel(data).build()
     try:
         results = model.solve()
+        # 1. Primal solution: one row per hour
+        primal = results.hourly[["load", "pv", "import", "export"]]
+        print("\nPrimal solution:")
+        print(primal.to_string())
+
+        # 2. Objective, procurement cost and utility
+        financial = results.meta["financial_breakdown"]
+
+        print(f"\nSurplus: {results.objective:.4f} DKK")
+        print(f"Procurement cost: {financial['net_procurement_cost_DKK']:.4f} DKK")
+        print(f"Utility: {financial['utility_DKK']:.4f} DKK")
+
+        # 3. Dual variables required in Question 1(c)
+        duals = results.hourly[[
+            "dual_balance",
+            "dual_pv_upper",
+            "dual_load_lower",
+            "dual_load_upper",
+        ]]
+        print("\nDual variables:")
+        print(duals.to_string())
     except NotImplementedError as e:
         print(f"[skipped] {e}")
         return None
