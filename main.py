@@ -15,7 +15,7 @@ from pathlib import Path
 import matplotlib
 
 from src.data_loader import load_question, list_questions
-from src.model import FlexibleConsumerModel, Results
+from src.model import FlexibleConsumerModel, Results, LinearDiscomfortModel
 from src.plotting import plot_duals, plot_inputs, plot_scenario_comparison, plot_schedule
 from src.scenarios import scale_prices, scale_pv, set_tariffs
 
@@ -26,8 +26,13 @@ def run_base_case(question: str, out: Path, show: bool) -> Results | None:
     data = load_question(question)
     print(data.summary(), "\n")
     plot_inputs(data, save_to=out / "inputs.png")
-
-    model = FlexibleConsumerModel(data).build()
+    if data.question == "Q2_linear":
+        # 1.43 is the default
+        # Values to try [0.5, 1.34, 1.42, 1.6, 2.0, 2.09, 2.11, 3.1]
+        c_L = 1.43
+        model = LinearDiscomfortModel(data, c_L=c_L).build()
+    else:
+        model = FlexibleConsumerModel(data).build()
     try:
         results = model.solve()
         # 1. Primal solution: one row per hour
@@ -51,6 +56,11 @@ def run_base_case(question: str, out: Path, show: bool) -> Results | None:
         ]]
         print("\nDual variables:")
         print(duals.to_string())
+        # Hours at bounds
+        load = results.hourly["load"]
+        tol = 1e-6
+        hours_at_bounds = ((abs(load - data.load_min_kWh) <= tol) | (abs(load - data.load_max_kWh) <= tol)).sum()
+        print(f"Hours at load bounds: {hours_at_bounds}")
     except NotImplementedError as e:
         print(f"[skipped] {e}")
         return None

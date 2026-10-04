@@ -254,6 +254,106 @@ class FlexibleConsumerModel:
             meta=meta,
         )
 
+class LinearDiscomfortModel(FlexibleConsumerModel):
+    """Question 2(b): linear discomfort from reference-load deviations."""
+    def __init__(self, data: InputData, *, c_L: float, name: str = "linear_discomfort", verbose: bool = False):
+        """Initialize with case data and c_L in DKK/kWh."""
+        c_L = float(c_L)
+        if not np.isfinite(c_L) or c_L <= 0:
+            raise ValueError("c_L must be finite and strictly positive.")
+        if data.reference_load is None:
+            raise ValueError("Q2(b) requires a reference load profile.")
+        reference = np.asarray(data.reference_load, dtype=float)
+        if reference.shape != (data.n_hours,) or not np.all(np.isfinite(reference)):
+            raise ValueError("reference_load must contain one finite value per hour.")
+        super().__init__(data, name=name, verbose=verbose)
+        self.c_L = c_L
+        
+    def build(self) -> "LinearDiscomfortModel":
+        d, m, T = self.data, self.m, self.T
+        
+        price_import = d.energy_price + d.import_tariff
+        price_export = d.energy_price - d.export_tariff
+        # Decision variables
+        for name in ("load", "pv", "import", "export"):
+            self.var[name] = m.addVars(T, lb=-GRB.INFINITY,vtype=GRB.CONTINUOUS, name=name)
+        self.var["abs_deviation"] = m.addVars(T, lb=0.0, vtype=GRB.CONTINUOUS, name="abs_deviation")
+        load = self.var["load"]
+        pv = self.var["pv"]
+        imports = self.var["import"]
+        exports = self.var["export"]
+        deviation = self.var["abs_deviation"]
+        # Objective
+        m.setObjective(
+            gp.quicksum(
+                -self.c_L * deviation[t]
+                - d.pv_marginal_cost * self.var["pv"][t]
+                - price_import[t] * self.var["import"][t]
+                + price_export[t] * self.var["export"][t]
+                for t in T
+            ),
+            GRB.MAXIMIZE,
+        )
+        
+        # Physical constraints
+        self.con["balance"] = m.addConstrs(
+            (load[t] + exports[t] - imports[t] - pv[t] == 0
+            for t in T),
+            name="balance")
+        self.con["load_lower"] = m.addConstrs(
+            (-load[t] <= -d.load_min_kWh for t in T),
+            name="load_lower")
+        self.con["load_upper"] = m.addConstrs(
+            (load[t] <= d.load_max_kWh for t in T),
+            name="load_upper")
+        self.con["pv_lower"] = m.addConstrs(
+            (-pv[t] <= 0 for t in T),
+            name="pv_lower")
+        self.con["pv_upper"] = m.addConstrs(
+            (pv[t] <= d.pv_available[t] for t in T),
+            name="pv_upper")
+        self.con["import_lower"] = m.addConstrs(
+            (-imports[t] <= 0 for t in T),
+            name="import_lower")
+        self.con["export_lower"] = m.addConstrs(
+            (-exports[t] <= 0 for t in T),
+            name="export_lower")
+        
+        # Absolute-deviation constraints
+        self.con["deviation_positive"] = m.addConstrs(
+            (load[t] - d.reference_load[t] <= deviation[t] 
+             for t in T),
+            name="deviation_positive")
+        self.con["deviation_negative"] = m.addConstrs(
+            (d.reference_load[t] - load[t] <= deviation[t] 
+             for t in T),
+            name="deviation_negative")
+        m.update()
+        return self
+    
+    def _add_financial_breakdown(self, hourly: pd.DataFrame, meta: dict) -> None:
+        """Add hourly and daily Q2 costs (DKK) and energy deviations (kWh)."""
+        d = self.data
+        price_import = d.energy_price + d.import_tariff
+        price_export = d.energy_price - d.export_tariff
+        hourly["deviation_kWh"] = hourly["load"] - hourly["reference_load"]
+        hourly["absolute_deviation_kWh"] = hourly["deviation_kWh"].abs()
+        hourly["disutility_DKK"] = self.c_L * hourly["absolute_deviation_kWh"]
+        hourly["utility_DKK"] = -hourly["disutility_DKK"]
+        hourly["pv_cost_DKK"] = d.pv_marginal_cost * hourly["pv"]
+        hourly["import_cost_DKK"] = price_import * hourly["import"]
+        hourly["export_revenue_DKK"] = price_export * hourly["export"]
+        hourly["net_procurement_cost_DKK"] = (hourly["pv_cost_DKK"] + hourly["import_cost_DKK"] - hourly["export_revenue_DKK"])
+        hourly["surplus_DKK"] = (hourly["utility_DKK"] - hourly["net_procurement_cost_DKK"])
+        financial_columns = ["disutility_DKK", "utility_DKK", "pv_cost_DKK", "import_cost_DKK", "export_revenue_DKK", "net_procurement_cost_DKK", "surplus_DKK"]
+        meta["financial_breakdown"] = {name: float(hourly[name].sum()) for name in financial_columns}
+        meta["c_L"] = self.c_L
+    
+    def _extract_results(self, status: str) -> Results:
+        """Extract the solution and add linear discomfort costs."""
+        results = super()._extract_results(status)
+        self._add_financial_breakdown(results.hourly, results.meta)
+        return results
 
 _STATUS = {
     GRB.OPTIMAL: "OPTIMAL", GRB.INFEASIBLE: "INFEASIBLE", GRB.UNBOUNDED: "UNBOUNDED",
