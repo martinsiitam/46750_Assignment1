@@ -15,7 +15,7 @@ from pathlib import Path
 import matplotlib
 
 from src.data_loader import load_question, list_questions
-from src.model import FlexibleConsumerModel, Results, LinearDiscomfortModel
+from src.model import FlexibleConsumerModel, Results, LinearDiscomfortModel, QuadraticDiscomfortModel
 from src.plotting import plot_duals, plot_inputs, plot_scenario_comparison, plot_schedule
 from src.scenarios import scale_prices, scale_pv, set_tariffs
 
@@ -31,6 +31,8 @@ def run_base_case(question: str, out: Path, show: bool) -> Results | None:
         # Values to try [0.5, 1.34, 1.42, 1.6, 2.0, 2.09, 2.11, 3.1]
         c_L = 1.43
         model = LinearDiscomfortModel(data, c_L=c_L).build()
+    elif data.question == "Q2_quadratic":
+        model = QuadraticDiscomfortModel(data, c_Q=1.0).build()
     else:
         model = FlexibleConsumerModel(data).build()
     try:
@@ -38,7 +40,8 @@ def run_base_case(question: str, out: Path, show: bool) -> Results | None:
         # 1. Primal solution: one row per hour
         primal = results.hourly[["load", "pv", "import", "export"]]
         print("\nPrimal solution:")
-        print(primal.to_string())
+        #print(primal.to_string())
+        print(primal.to_string(float_format=lambda x: f"{0.0 if abs(x) < 1e-6 else x:.4f}"))
 
         # 2. Objective, procurement cost and utility
         financial = results.meta["financial_breakdown"]
