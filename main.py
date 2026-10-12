@@ -22,9 +22,9 @@ from src.scenarios import scale_prices, scale_pv, set_tariffs
 RESULTS_DIR = Path(__file__).resolve().parent / "results"
 
 # CONFIGURATIONS
-LINEAR_SWEEP = (0.50, 1.34, 1.42, 1.43, 1.60, 2.00, 2.09, 2.11, 3.10)
-QUADRATIC_SWEEP = (0.10, 0.50, 1.00, 2.00, 5.00, 10.00)
-PRICE_PROFILES = ("alternating_1", "alternating_2", "blocks_1","blocks_2")
+LINEAR_SWEEP = (0.50, 1.34, 1.42, 1.60, 2.00, 2.09, 2.11, 3.10) # 1.43 is default
+QUADRATIC_SWEEP = (0.10, 0.50, 2.00, 5.00, 10.00) #  1.00 is default
+PRICE_PROFILES = ("alternating_1", "alternating_2", "blocks_1", "blocks_2")
 
 def build_model_for_case(data):
     """Build the correct optimization model for the loaded question data."""
@@ -62,8 +62,19 @@ def build_scenario_models(question: str, bus_params: str | None = None):
         for c_Q in QUADRATIC_SWEEP:
             models[c_Q] = QuadraticDiscomfortModel(data, c_Q=c_Q).build()
         return models
-    if question == "Q2_linked_hours":
-        return {"base": LinkedHoursDiscomfortModel(data, c_Q=1.0, c_P=1.0).build()}
+    if question == "Q2_linked_hours": # Instead of sweep this has the different price profiles across the different models (model default kept as input)
+        models = {}
+        for profile in PRICE_PROFILES:
+            # Linked hours
+            data = load_question(question, bus_params=profile)
+            models["linked hours " + profile] = LinkedHoursDiscomfortModel(data, c_Q=1.0, c_P=1.0).build()
+            # Quadratic
+            data = load_question("Q2_quadratic", bus_params=profile)
+            models["quadratic " + profile] = QuadraticDiscomfortModel(data, c_Q=1.0).build()
+            # Linear
+            data = load_question("Q2_linear", bus_params=profile)
+            models["linear " + profile] = LinearDiscomfortModel(data, c_L=1.43).build()
+        return models
     raise NotImplementedError(f"No model implemented for {question}")
 
 
@@ -114,33 +125,94 @@ def run_base_case(question: str, out: Path, show: bool, bus_params: str | None =
 
 
 def run_scenarios(question: str, out: Path, bus_params: str | None = None) -> dict[str, Results]:
-    """Example sensitivity analysis. Replace with the scenarios you design in Question 1.g.
-    base = load_question(question, bus_params=bus_params)
-    scenarios = {
-            "base": base,
-            "flat_prices": scale_prices(base, factor=0.0, keep_mean=True),
-            "double_spread": scale_prices(base, factor=2.0, keep_mean=True),
-            "no_tariffs": set_tariffs(base, import_tariff=0.0, export_tariff=0.0),
-            "no_pv": scale_pv(base, factor=0.0),
-        }
-    runs: dict[str, Results] = {}
-    for name, data in scenarios.items():
-        results = FlexibleConsumerModel(data).build().solve()
-        results.save(out, tag=name)
-        runs[name] = results
-        print(f"{name:>14}: cost {results.objective:8.2f} DKK | import {results.hourly['import'].sum():5.1f} kWh"
-                f" | export {results.hourly['export'].sum():5.1f} kWh")
-    plot_scenario_comparison(runs, "objective", save_to=out / "scenarios_cost.png")
-    return runs
-    """
     scenario_models = build_scenario_models(question, bus_params=bus_params)
     runs: dict[str, Results] = {}
-    for name, model in scenario_models.items():
+    is_sweep = question in ("Q2_linear", "Q2_quadratic")
+    if is_sweep:
+        coefficient_name = "c_L" if question == "Q2_linear" else "c_Q"
+        print(
+            f"\n{coefficient_name:>7} "
+            f"{'Procurement':>13} "
+            f"{'Discomfort':>12} "
+            f"{'Consumption':>13} "
+            f"{'Deviation':>11} "
+            f"{'Bounds':>7} "
+            f"{'Surplus':>12}")
+        print("-" * 87)
+    if question == "Q2_linked_hours":
+        print(
+            f"\n{'Scenario':<30} "
+            f"{'Surplus [DKK]':>14} "
+            f"{'Import [kWh]':>14} "
+            f"{'Export [kWh]':>14}"
+        )
+        print("-" * 78)
+    for name, model in sorted(scenario_models.items(), key=lambda x: str(x[0]).lower()): # sorted for easier viewing later
         results = model.solve()
-        #results.save(out, tag=name)
+        # results.save(out, tag=name)
         runs[name] = results
-        print(f"{name:>14}: cost {results.objective:8.2f} DKK | import {results.hourly['import'].sum():5.1f} kWh | export {results.hourly['export'].sum():5.1f} kWh")
-    plot_scenario_comparison(runs, "objective", save_to=out / "scenarios_cost.png")
+        if is_sweep:
+            # Financial results
+            financial = results.meta["financial_breakdown"]
+            procurement = financial["net_procurement_cost_DKK"]
+            discomfort = financial["disutility_DKK"]
+            surplus = results.objective
+            # Daily consumption
+            load = results.hourly["load"]
+            consumption = load.sum()
+            # Total absolute deviation from the reference
+            reference = results.hourly["reference_load"]
+            deviation = (load - reference).abs().sum()
+            # Hours where a load bound is binding
+            data = model.data
+            tolerance = 1e-6
+            at_lower = (load - data.load_min_kWh).abs() < tolerance
+            at_upper = (load - data.load_max_kWh).abs() < tolerance
+            binding_hours = int((at_lower | at_upper).sum())
+
+            # Coefficient used in this scenario
+            coefficient = model.c_L if question == "Q2_linear" else model.c_Q
+            print(
+                f"{coefficient:7.2f} "
+                f"{procurement:13.4f} "
+                f"{discomfort:12.4f} "
+                f"{consumption:13.2f} "
+                f"{deviation:11.2f} "
+                f"{binding_hours:7d} "
+                f"{surplus:12.4f}"
+            )
+        if question == "Q2_linked_hours":
+            print(
+                f"{name:<30} "
+                f"{results.objective:>14.2f} "
+                f"{results.hourly['import'].sum():>14.1f} "
+                f"{results.hourly['export'].sum():>14.1f}"
+            )
+    if question == "Q2_linked_hours":
+        print("\nAverage results by price pattern")
+        print(
+            f"{'Model':<16} "
+            f"{'Price pattern':<15} "
+            f"{'Surplus [DKK]':>15} "
+            f"{'Deviation [kWh]':>18}"
+        )
+        print("-" * 67)
+        for model_name in ("linear", "linked hours", "quadratic"):
+            for pattern, prefix in (
+                ("Alternating", "alternating"),
+                ("Blocks", "blocks")):
+
+                pair = [runs[f"{model_name} {prefix}_{i}"] for i in (1, 2)]
+                avg_surplus = sum(r.objective for r in pair) / 2
+                avg_deviation = sum((r.hourly["load"] - r.hourly["reference_load"]).abs().sum() for r in pair) / 2
+                print(
+                    f"{model_name:<16} "
+                    f"{pattern:<15} "
+                    f"{avg_surplus:>15.4f} "
+                    f"{avg_deviation:>18.4f}"
+                )        
+    
+    plot_scenario_comparison(runs,"objective", save_to=out / "scenarios_surplus.png")
     return runs
 
 def main() -> None:
