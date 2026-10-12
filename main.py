@@ -22,8 +22,8 @@ from src.scenarios import scale_prices, scale_pv, set_tariffs
 RESULTS_DIR = Path(__file__).resolve().parent / "results"
 
 
-def run_base_case(question: str, out: Path, show: bool) -> Results | None:
-    data = load_question(question)
+def run_base_case(question: str, out: Path, show: bool, bus_params: str | None = None) -> Results | None:
+    data = load_question(question, bus_params=bus_params)
     print(data.summary(), "\n")
     plot_inputs(data, save_to=out / "inputs.png")
     if data.question == "Q2_linear":
@@ -76,6 +76,10 @@ def run_base_case(question: str, out: Path, show: bool) -> Results | None:
         return None
 
     print(results, "\n")
+    if bus_params is not None:
+        out = out.with_name(out.name + "_" +  bus_params)
+        results.question = results.question + "_" + bus_params
+        out.mkdir(parents=True, exist_ok=True)
     results.save(out)
     plot_schedule(results, data, save_to=out / "schedule.png")
     plot_duals(results, data, save_to=out / "duals.png")
@@ -110,14 +114,19 @@ def main() -> None:
     parser.add_argument("--question", default="Q1_caseA", choices=list_questions(), help="data case to use")
     parser.add_argument("--scenarios", action="store_true", help="also run the example sensitivity scenarios")
     parser.add_argument("--show", action="store_true", help="open the figures in a window")
+    parser.add_argument("--bus-params",type=str, default=None, help="Alternative bus parameter JSON file") # allows to set "alternating" or "blocks", for everything besides 2.E.iv dont add the parameter
+    
     args = parser.parse_args()
 
     out = RESULTS_DIR / args.question
     out.mkdir(parents=True, exist_ok=True)
     if not args.show:
         matplotlib.use("Agg")
-
-    base = run_base_case(args.question, out, args.show)
+    bus_param = args.bus_params
+    if bus_param is not None:
+        if bus_param not in ["alternating_1", "alternating_2","blocks_1", "blocks_2"] :
+            raise ValueError("To use custom --bus-params for 2.E.iv then it must be either 'alternating_1', 'alternating_2' or 'blocks_1', 'blocks_2'")
+    base = run_base_case(args.question, out, args.show, bus_params = bus_param)
     if args.scenarios and base is not None:
         run_scenarios(args.question, out)
     print(f"\nOutputs written to {out}")
