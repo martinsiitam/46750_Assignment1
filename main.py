@@ -15,7 +15,7 @@ from pathlib import Path
 import matplotlib
 
 from src.data_loader import load_question, list_questions
-from src.model import FlexibleConsumerModel, Results, LinearDiscomfortModel, QuadraticDiscomfortModel
+from src.model import FlexibleConsumerModel, Results, LinearDiscomfortModel, QuadraticDiscomfortModel, LinkedHoursDiscomfortModel
 from src.plotting import plot_duals, plot_inputs, plot_scenario_comparison, plot_schedule
 from src.scenarios import scale_prices, scale_pv, set_tariffs
 
@@ -31,8 +31,15 @@ def run_base_case(question: str, out: Path, show: bool) -> Results | None:
         # Values to try [0.5, 1.34, 1.42, 1.6, 2.0, 2.09, 2.11, 3.1]
         c_L = 1.43
         model = LinearDiscomfortModel(data, c_L=c_L).build()
+    elif question == "Q2_linked_hours":
+        c_Q = 1.0
+        c_P = 1.0
+        model = LinkedHoursDiscomfortModel(data, c_Q=c_Q, c_P=c_P).build()
     elif data.question == "Q2_quadratic":
-        model = QuadraticDiscomfortModel(data, c_Q=1.0).build()
+        # 1.0 is the default
+        # Values to try for sweep [0.1, 0.5, 1.0, 2.0, 5.0, 10.0]
+        c_Q = 1.0
+        model = QuadraticDiscomfortModel(data, c_Q=c_Q).build()
     else:
         model = FlexibleConsumerModel(data).build()
     try:

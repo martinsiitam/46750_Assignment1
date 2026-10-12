@@ -436,7 +436,59 @@ class QuadraticDiscomfortModel(FlexibleConsumerModel):
         results = super()._extract_results(status)
         self._add_financial_breakdown(results.hourly, results.meta)
         return results
-        
+     
+class LinkedHoursDiscomfortModel(QuadraticDiscomfortModel):
+    """Quadratic discomfort plus consecutive-shortfall penalty."""     
+    def __init__(self, data: InputData, *, c_Q: float = 1.0, c_P: float = 1.0,name: str = "nonseparable_discomfort", verbose: bool = False):
+        super().__init__(data, c_Q=c_Q, name=name, verbose=verbose)
+        c_P = float(c_P)
+        if not np.isfinite(c_P) or c_P <= 0:
+            raise ValueError("c_P must be finite and positive.")
+        self.c_P = c_P
+   
+    def build(self) -> "LinkedHoursDiscomfortModel":
+        # Reuse Q2(c)'s quadratic objective and physical constraints.
+        super().build()
+        d, m = self.data, self.m
+        n = d.n_hours
+        load = self.var["load"]
+        s = self.var["shortfall"] = m.addVars(self.T, lb=0.0, vtype=GRB.CONTINUOUS, name="shortfall")
+        self.con["shortfall_lower"] = m.addConstrs((s[t] >= d.reference_load[t] - load[t] for t in self.T),name="shortfall_lower")
+        # Boundary conditions s[-1] = s[n] = 0.
+        persistence_cost = 0.5 * self.c_P * (s[0] * s[0] + gp.quicksum((s[t - 1] + s[t]) * (s[t - 1] + s[t]) for t in range(1, n)) + s[n - 1] * s[n - 1])
+        m.setObjective(m.getObjective() - persistence_cost, GRB.MAXIMIZE)
+        m.update()
+        return self
+    
+    def _add_financial_breakdown(self, hourly: pd.DataFrame, meta: dict) -> None:
+        # Q2(c) already computes the same PV/import/export costs and deviations.
+        super()._add_financial_breakdown(hourly, meta)
+        s = hourly["shortfall"].to_numpy(dtype=float)
+        prev = np.concatenate(([0.0], s[:-1]))
+        following = np.concatenate((s[1:], [0.0]))
+
+        # Expand the reported penalty:
+        # c_P/2 * sum((s[t-1]+s[t])^2, t=0..n)
+        #   = c_P * sum(s[t]^2) + c_P * sum(s[t-1]*s[t], t=1..n-1).
+        # Each neighbouring product is shared equally by its two hours for
+        # reporting; the summed hourly entries equal the exact daily penalty.
+        hourly["quadratic_disutility_DKK"] = self.c_Q * hourly["deviation_kWh"] ** 2
+        hourly["persistence_disutility_DKK"] = self.c_P * (s**2 + 0.5 * s * (prev + following))
+        hourly["disutility_DKK"] = (hourly["quadratic_disutility_DKK"] + hourly["persistence_disutility_DKK"])
+        hourly["utility_DKK"] = -hourly["disutility_DKK"]
+        hourly["surplus_DKK"] = (hourly["utility_DKK"] - hourly["net_procurement_cost_DKK"])
+        financial = meta["financial_breakdown"]
+        for key in ("disutility_DKK", "utility_DKK", "surplus_DKK"):
+            financial[key] = float(hourly[key].sum())
+        financial["quadratic_disutility_DKK"] = float(hourly["quadratic_disutility_DKK"].sum())
+        financial["persistence_disutility_DKK"] = float(hourly["persistence_disutility_DKK"].sum())
+        meta["c_P"] = self.c_P
+
+    def _extract_results(self, status: str) -> Results:
+        results = super()._extract_results(status)
+        results.question = "Q2_linked_hours"
+        return results
+   
 _STATUS = {
     GRB.OPTIMAL: "OPTIMAL", GRB.INFEASIBLE: "INFEASIBLE", GRB.UNBOUNDED: "UNBOUNDED",
     GRB.INF_OR_UNBD: "INF_OR_UNBD", GRB.TIME_LIMIT: "TIME_LIMIT", GRB.SUBOPTIMAL: "SUBOPTIMAL",

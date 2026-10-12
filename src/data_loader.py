@@ -167,7 +167,7 @@ def load_question(question: str, data_dir: Path | str = DATA_DIR, consumer_index
             f"Unknown case {question!r} (no {case_file.name} in {data_dir}). "
             f"Available: {list_questions(data_dir)}"
         )
-
+        
     raw = {name.removesuffix(".json"): _read_json(data_dir / name) for name in SHARED_FILES}
     raw["params"] = _read_json(case_file)
 
