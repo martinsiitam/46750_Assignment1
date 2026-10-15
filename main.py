@@ -15,7 +15,7 @@ from pathlib import Path
 import matplotlib
 
 from src.data_loader import load_question, list_questions
-from src.model import FlexibleConsumerModel, Results, LinearDiscomfortModel, QuadraticDiscomfortModel
+from src.model import FlexibleConsumerModel, Results, LinearDiscomfortModel, QuadraticDiscomfortModel, minimumDailyLoadModel
 from src.plotting import plot_duals, plot_inputs, plot_scenario_comparison, plot_schedule
 from src.scenarios import scale_prices, scale_pv, set_tariffs
 
@@ -33,6 +33,8 @@ def run_base_case(question: str, out: Path, show: bool) -> Results | None:
         model = LinearDiscomfortModel(data, c_L=c_L).build()
     elif data.question == "Q2_quadratic":
         model = QuadraticDiscomfortModel(data, c_Q=1.0).build()
+    elif data.question == "Q3":
+        model = minimumDailyLoadModel(data, c_Q=1.0).build()
     else:
         model = FlexibleConsumerModel(data).build()
     try:
@@ -63,6 +65,7 @@ def run_base_case(question: str, out: Path, show: bool) -> Results | None:
         load = results.hourly["load"]
         tol = 1e-6
         hours_at_bounds = ((abs(load - data.load_min_kWh) <= tol) | (abs(load - data.load_max_kWh) <= tol)).sum()
+
         print(f"Hours at load bounds: {hours_at_bounds}")
     except NotImplementedError as e:
         print(f"[skipped] {e}")
