@@ -15,9 +15,7 @@ from pathlib import Path
 import matplotlib
 
 from src.data_loader import load_question, list_questions
-from src.model import FlexibleConsumerModel, Results, LinearDiscomfortModel, QuadraticDiscomfortModel, minimumDailyLoadModel
-from src.data_loader import load_question, list_questions, InputData
-from src.model import FlexibleConsumerModel, Results, LinearDiscomfortModel, QuadraticDiscomfortModel, LinkedHoursDiscomfortModel
+from src.model import FlexibleConsumerModel, Results, LinearDiscomfortModel, QuadraticDiscomfortModel, minimumDailyLoadModel, LinkedHoursDiscomfortModel
 from src.plotting import plot_duals, plot_inputs, plot_scenario_comparison, plot_schedule
 from src.scenarios import scale_prices, scale_pv, set_tariffs, set_load_preferences, shift_reference_load
 
@@ -33,20 +31,22 @@ def build_model_for_case(data):
     if data.question in ("Q1_caseA", "Q1_caseB"):
         return FlexibleConsumerModel(data).build()
 
-    if data.question == "Q2_linear":
+    elif data.question == "Q2_linear":
         # 1.43 is the default
         # Values to try for sweep [0.5, 1.34, 1.42, 1.6, 2.0, 2.09, 2.11, 3.1]
         return LinearDiscomfortModel(data, c_L=1.43).build()
 
-    if data.question == "Q2_quadratic":
+    elif data.question == "Q2_quadratic":
         # 1.0 is the default
         # Values to try for sweep [0.1, 0.5, 1.0, 2.0, 5.0, 10.0]
         return QuadraticDiscomfortModel(data, c_Q=1.0).build()
 
-    if data.question == "Q2_linked_hours":
+    elif data.question == "Q2_linked_hours":
         return LinkedHoursDiscomfortModel(data, c_Q=1.0, c_P=1.0).build()
+    
+    elif data.question == "Q3":
+        return minimumDailyLoadModel(data, c_Q=1.0).build()
 
-    # Q3 HERE
     raise NotImplementedError(f"No model implemented for {data.question}")
 
 def build_scenario_models(question: str, bus_params: str | None = None):
@@ -54,17 +54,17 @@ def build_scenario_models(question: str, bus_params: str | None = None):
     data = load_question(question, bus_params=bus_params)
     if question in ("Q1_caseA", "Q1_caseB"):
         return {"base": FlexibleConsumerModel(data).build()}
-    if question == "Q2_linear":
+    elif question == "Q2_linear":
         models = {}
         for c_L in LINEAR_SWEEP:
             models[c_L] = LinearDiscomfortModel(data, c_L=c_L).build()
         return models
-    if question == "Q2_quadratic":
+    elif question == "Q2_quadratic":
         models = {}
         for c_Q in QUADRATIC_SWEEP:
             models[c_Q] = QuadraticDiscomfortModel(data, c_Q=c_Q).build()
         return models
-    if question == "Q2_linked_hours": # Instead of sweep this has the different price profiles across the different models (model default kept as input)
+    elif question == "Q2_linked_hours": # Instead of sweep this has the different price profiles across the different models (model default kept as input)
         models = {}
         for profile in PRICE_PROFILES:
             # Linked hours
@@ -76,6 +76,25 @@ def build_scenario_models(question: str, bus_params: str | None = None):
             # Linear
             data = load_question("Q2_linear", bus_params=profile)
             models["linear " + profile] = LinearDiscomfortModel(data, c_L=1.43).build()
+        return models
+    elif question == "Q3":
+        base = load_question(question, bus_params=bus_params)
+        scenarios = {
+                "base" : base,
+                "lower daily minimum load - 22" : set_load_preferences(base, min_daily_energy_kWh = 22),
+                "lower daily minimum load - 23" : set_load_preferences(base, min_daily_energy_kWh = 23),
+                "lower daily minimum load - 30" : set_load_preferences(base, min_daily_energy_kWh = 30),
+                "lower daily minimum load - 32" : set_load_preferences(base, min_daily_energy_kWh = 32),
+                "lower daily minimum load - 32.3" : set_load_preferences(base, min_daily_energy_kWh = 32.3),
+                "lower daily minimum load - 35" : set_load_preferences(base, min_daily_energy_kWh = 35),
+                "higher minimum reference load 39.3" : shift_reference_load(base, 7/24),
+                "higher minimum reference load 40" : shift_reference_load(base, 7.7/24),
+                "higher minimum reference load 40.3" : shift_reference_load(base, 8/24),
+                "higher minimum reference load 45" : shift_reference_load(base, 12.7/24)
+        }
+        models = {}
+        for name, input_data in scenarios.items():
+            models[name] = minimumDailyLoadModel(input_data, c_Q=1.0).build()
         return models
     raise NotImplementedError(f"No model implemented for {question}")
 
@@ -150,6 +169,16 @@ def run_scenarios(question: str, out: Path, bus_params: str | None = None) -> di
             f"{'Export [kWh]':>14}"
         )
         print("-" * 78)
+        
+    if question == "Q3":
+        print("\nQuestion 3 - Scenario Analysis")
+        print(
+            f"{'Scenario':<35}"
+            f"{'Objective [DKK]':>18}"
+            f"{'Import [kWh]':>17}"
+            f"{'Export [kWh]':>17}"
+        )
+        print("-" * 87)
     for name, model in sorted(scenario_models.items(), key=lambda x: str(x[0]).lower()): # sorted for easier viewing later
         results = model.solve()
         # results.save(out, tag=name)
@@ -191,6 +220,13 @@ def run_scenarios(question: str, out: Path, bus_params: str | None = None) -> di
                 f"{results.hourly['import'].sum():>14.1f} "
                 f"{results.hourly['export'].sum():>14.1f}"
             )
+        if question == "Q3":
+            print(
+                f"{name:<35}"
+                f"{results.objective:>18.2f}"
+                f"{results.hourly['import'].sum():>17.1f}"
+                f"{results.hourly['export'].sum():>17.1f}"
+            )
     if question == "Q2_linked_hours":
         print("\nAverage results by price pattern")
         print(
@@ -213,7 +249,7 @@ def run_scenarios(question: str, out: Path, bus_params: str | None = None) -> di
                     f"{pattern:<15} "
                     f"{avg_surplus:>15.4f} "
                     f"{avg_deviation:>18.4f}"
-                )        
+                )    
     
     plot_scenario_comparison(runs,"objective", save_to=out / "scenarios_surplus.png")
     return runs
