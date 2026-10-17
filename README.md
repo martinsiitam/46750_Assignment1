@@ -1,68 +1,61 @@
-# 46750 - Optimization in Modern Power Systems: Assignment 1 Group 4
+# 46750 - Optimization in Modern Power Systems: Assignment 1
 
-## Setup
+## Requirements
 
-From the folder containing `main.py`, run:
+- Packages listed in `requirements.txt` (including `gurobipy`, NumPy, pandas, and Matplotlib)
+- A working **Gurobi license**
+
+From the project folder containing `main.py`, install the packages:
 
 ```bash
 python -m pip install -r requirements.txt
 ```
 
-A working **Gurobi license** is required (an academic license is suitable).
+## Run the base cases
 
-## 1. Run a base case
+Run any of these commands from the project folder:
 
-Run `python main.py --question CASE`, replacing `CASE` with:
+| Question | Command | Description |
+| --- | --- | --- |
+| Q1, Case A | `python main.py --question Q1_caseA` | PV cost below consumption utility |
+| Q1, Case B | `python main.py --question Q1_caseB` | PV cost above consumption utility |
+| Q2(b) | `python main.py --question Q2_linear` | Linear discomfort |
+| Q2(c) | `python main.py --question Q2_quadratic` | Quadratic discomfort |
+| Q2(e), bonus | `python main.py --question Q2_linked_hours` | Discomfort linked across hours |
+| Q3 | `python main.py --question Q3` | Minimum daily energy requirement |
 
-| Case | Model |
-| --- | --- |
-| `Q1_caseA` | Linear utility; cheaper PV |
-| `Q1_caseB` | Linear utility; more expensive PV |
-| `Q2_linear` | Linear deviation discomfort, `c_L = 1.43` |
-| `Q2_quadratic` | Quadratic discomfort, `c_Q = 1.0` |
-| `Q2_linked_hours` | Quadratic + consecutive-shortfall discomfort |
+Base-case runs print the optimal schedule and summary in the terminal. They also save result files and figures (such as `inputs.png`, `schedule.png`, and `duals.png`) under `results/<case>/`.
 
-For example:
+## Run the report scenarios
+
+Add `--scenarios` to run the experiments associated with each question:
+
+| Question | Command | What it runs |
+| --- | --- | --- |
+| Q1 | `python main.py --question Q1_caseA --scenarios` | Comparison of Cases A and B |
+| Q2(b) | `python main.py --question Q2_linear --scenarios` | Sweep of linear discomfort coefficient `c_L` |
+| Q2(c) | `python main.py --question Q2_quadratic --scenarios` | Sweep of quadratic discomfort coefficient `c_Q` |
+| Q2(e) | `python main.py --question Q2_linked_hours --scenarios` | Linear, quadratic, and linked-hours models under alternating/block price profiles |
+| Q3 | `python main.py --question Q3 --scenarios` | Q3 sensitivity analysis |
+
+Scenario results are printed as comparison tables in the terminal; generated files are saved in the `results/` directory. **Surplus** is the maximized objective and is not the same as procurement cost.
+
+### Run one Q2 price profile with full figures
+
+Use `--bus-params` to select one of the Q2(e) price profiles:
 
 ```bash
-python main.py --question Q2_quadratic
+python main.py --question Q2_linked_hours --bus-params alternating_1 --show
 ```
 
-Each base-case run saves `inputs.png`, `schedule.png`, `duals.png`, and CSV/TXT results in `results/<CASE>/`
+Available profiles: `alternating_1`, `alternating_2`, `blocks_1`, and `blocks_2`. This runs **one** profile and generates its base-case figures. Use `--scenarios` separately to run the complete comparison.
 
-## 2. Change price profiles and get the same graphs
+## Project files
 
-To use an alternative price profile (without modifying the original data):
-
-```bash
-python main.py --question Q2_linear --bus-params alternating_1 --show
-```
-
-Available profiles: `alternating_1`, `alternating_2`, `blocks_1`, `blocks_2`. Outputs go to a separate folder, such as `results/Q2_linear_alternating_1/`.
-
-## 3. Reproduce the report's scenarios
-
-Add `--scenarios` to run the actual report experiments, not the original starter-code examples:
-
-| Command | Output |
-| --- | --- |
-| `python main.py --question Q1_caseA --scenarios` | Q1 Cases A and B (Table 6 in report) |
-| `python main.py --question Q2_linear --scenarios` | Nine `c_L` values (Table 8 in report) |
-| `python main.py --question Q2_quadratic --scenarios` | Six `c_Q` values (Table 9 in report) |
-| `python main.py --question Q2_linked_hours --scenarios` | 3 models x 4 price profiles; paired averages (Table 14 in report) |
-
-The runner prints comparison tables; scenario files, when saved by your version of `main.py`, are placed under `results/<CASE>/scenarios/`. 
-
-**IMPORTANT**  Use **`--bus-params` alone** for a single price-profile run with its full graphs, do not combine it with `--scenarios`. Example `python main.py --question Q2_linked_hours --bus-params alternating_1`
-
-**Reading the results:** The objective is *surplus*, not procurement cost. Q1 surplus = utility - procurement cost; Q2 surplus = -discomfort - procurement cost. At exact linear-cost ties, multiple schedules may have the same optimal surplus.
-
-## Code layout
-
-- `main.py` - command-line runs and report experiments
-- `src/model.py` - optimization models and results
-- `src/data_loader.py` - loads the JSON input data
-- `src/scenarios.py` - creates modified inputs
-- `src/plotting.py` - generates figures
-- `data/` - original parameters and alternative price profiles
-- `results/` - generated tables, solutions, and figures
+- `main.py` — command-line interface and scenario runs
+- `src/model.py` — optimization models and results
+- `src/data_loader.py` — loads the input data
+- `src/scenarios.py` — input modifications for sensitivity analyses
+- `src/plotting.py` — graphs
+- `data/` — provided model parameters and alternative price profiles
+- `results/` — generated outputs
