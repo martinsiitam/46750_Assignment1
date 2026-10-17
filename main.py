@@ -90,7 +90,11 @@ def build_scenario_models(question: str, bus_params: str | None = None):
                 "higher minimum reference load 39.3" : shift_reference_load(base, 7/24),
                 "higher minimum reference load 40" : shift_reference_load(base, 7.7/24),
                 "higher minimum reference load 40.3" : shift_reference_load(base, 8/24),
-                "higher minimum reference load 45" : shift_reference_load(base, 12.7/24)
+                "higher minimum reference load 45" : shift_reference_load(base, 12.7/24),
+                "higher minimum reference load 50" : shift_reference_load(base, 17.7/24),
+                "higher minimum reference load 55" : shift_reference_load(base, 22.7/24),
+                "higher minimum reference load 60" : shift_reference_load(base, 27.7/24),
+                "higher minimum reference load 65" : shift_reference_load(base, 32.7/24)
         }
         models = {}
         for name, input_data in scenarios.items():
