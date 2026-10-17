@@ -14,10 +14,12 @@ from pathlib import Path
 
 import matplotlib
 
+from src.data_loader import load_question, list_questions
+from src.model import FlexibleConsumerModel, Results, LinearDiscomfortModel, QuadraticDiscomfortModel, minimumDailyLoadModel
 from src.data_loader import load_question, list_questions, InputData
 from src.model import FlexibleConsumerModel, Results, LinearDiscomfortModel, QuadraticDiscomfortModel, LinkedHoursDiscomfortModel
 from src.plotting import plot_duals, plot_inputs, plot_scenario_comparison, plot_schedule
-from src.scenarios import scale_prices, scale_pv, set_tariffs
+from src.scenarios import scale_prices, scale_pv, set_tariffs, set_load_preferences, shift_reference_load
 
 RESULTS_DIR = Path(__file__).resolve().parent / "results"
 
@@ -106,6 +108,7 @@ def run_base_case(question: str, out: Path, show: bool, bus_params: str | None =
         load = results.hourly["load"]
         tol = 1e-6
         hours_at_bounds = ((abs(load - data.load_min_kWh) <= tol) | (abs(load - data.load_max_kWh) <= tol)).sum()
+
         print(f"Hours at load bounds: {hours_at_bounds}")
     except NotImplementedError as e:
         print(f"[skipped] {e}")
@@ -214,6 +217,34 @@ def run_scenarios(question: str, out: Path, bus_params: str | None = None) -> di
     
     plot_scenario_comparison(runs,"objective", save_to=out / "scenarios_surplus.png")
     return runs
+
+def q3fScenarios(question: str, out: Path) -> dict[str, Results]:
+    """scenarios for sensitivy analysis for question 3.f"""
+    base = load_question(question)
+    scenarios = {
+            "base" : base,
+            "lower daily minimum load - 22" : set_load_preferences(base, min_daily_energy_kWh = 22),
+            "lower daily minimum load - 23" : set_load_preferences(base, min_daily_energy_kWh = 23),
+            "lower daily minimum load - 30" : set_load_preferences(base, min_daily_energy_kWh = 30),
+            "lower daily minimum load - 32" : set_load_preferences(base, min_daily_energy_kWh = 32),
+            "lower daily minimum load - 32.3" : set_load_preferences(base, min_daily_energy_kWh = 32.3),
+            "lower daily minimum load - 35" : set_load_preferences(base, min_daily_energy_kWh = 35),
+            "higher minimum reference load 39.3" : shift_reference_load(base, 7/24),
+            "higher minimum reference load 40" : shift_reference_load(base, 7.7/24),
+            "higher minimum reference load 40.3" : shift_reference_load(base, 8/24),
+            "higher minimum reference load 45" : shift_reference_load(base, 12.7/24)
+    }
+
+    runs: dict[str, Results] = {}
+    for name, data in scenarios.items():
+        results = minimumDailyLoadModel(data, c_Q=1.0).build().solve()
+        results.save(out, tag=name)
+        runs[name] = results
+        print(f"{name:>14}: cost {results.objective:8.2f} DKK | import {results.hourly['import'].sum():5.1f} kWh"
+              f" | export {results.hourly['export'].sum():5.1f} kWh")
+    plot_scenario_comparison(runs, "objective", save_to=out / "scenarios_cost.png")
+    return runs
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)

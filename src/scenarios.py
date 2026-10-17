@@ -29,6 +29,15 @@ def scale_prices(data: InputData, factor: float, keep_mean: bool = False) -> Inp
     new_p = p.mean() + factor * (p - p.mean()) if keep_mean else factor * p
     return replace(data, energy_price=np.clip(new_p, 0.0, None))   # prices stay non-negative
 
+def scale_reference_load(data: InputData, factor: float) -> InputData:
+    """Multiplies the reference load by ``factor``."""
+    p = data.reference_load
+    new_p = p * factor
+    return replace(data, reference_load=np.clip(new_p, 0.0, None))   # prices stay non-negative
+
+def shift_reference_load(data: InputData, delta: float) -> InputData:
+    """Shifts the reference load by ``delta``."""
+    return replace(data, energy_price=np.clip(data.reference_load + delta, 0.0, None))
 
 def shift_prices(data: InputData, delta: float) -> InputData:
     """Add ``delta`` DKK/kWh to every hourly price (changes the mean, keeps the spread)."""
