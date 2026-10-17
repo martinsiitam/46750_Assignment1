@@ -90,9 +90,7 @@ def plot_duals(results: Results, data: InputData, save_to: Path | str | None = N
     return _finish(fig, save_to)
 
 
-def plot_scenario_comparison(
-    runs: dict[str, Results], metric: str = "objective", save_to: Path | str | None = None
-) -> plt.Figure:
+def plot_scenario_comparison(runs: dict[str, Results], metric: str = "objective", save_to: Path | str | None = None) -> plt.Figure:
     """Bar chart of one metric across scenarios. ``metric`` is ``"objective"`` or the name of an
     hourly column whose daily sum is compared (e.g. ``"import"``, ``"export"``, ``"load"``)."""
     names = list(runs)

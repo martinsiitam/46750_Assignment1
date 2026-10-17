@@ -147,7 +147,7 @@ def _case_name(question: str) -> str:
     return name.removeprefix("params_")
 
 
-def load_question(question: str, data_dir: Path | str = DATA_DIR, consumer_index: int = 0) -> InputData:
+def load_question(question: str, data_dir: Path | str = DATA_DIR, consumer_index: int = 0, bus_params= None ) -> InputData:
     """Read the shared catalogue plus ``params_<question>.json`` and return an :class:`InputData`.
 
     Parameters
@@ -167,8 +167,12 @@ def load_question(question: str, data_dir: Path | str = DATA_DIR, consumer_index
             f"Unknown case {question!r} (no {case_file.name} in {data_dir}). "
             f"Available: {list_questions(data_dir)}"
         )
-
+        
     raw = {name.removesuffix(".json"): _read_json(data_dir / name) for name in SHARED_FILES}
+    # For 2.E.iv bus params file can be non-default
+    if bus_params is not None:
+            param_path = "bus_params_" + bus_params + ".json"
+            raw["bus_params"] = _read_json(data_dir / param_path)
     raw["params"] = _read_json(case_file)
 
     consumer = raw["params"]["consumers"][consumer_index]
@@ -236,7 +240,7 @@ def load_question(question: str, data_dir: Path | str = DATA_DIR, consumer_index
         reference_load_next_day=None if nd_ref is None
             else load_max * _as_array(nd_ref, "reference_hourly_profile_ratio_next_day"),
     )
-
+    
     return InputData(
         question=case,
         consumer_id=cid,
