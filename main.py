@@ -254,40 +254,13 @@ def run_scenarios(question: str, out: Path, bus_params: str | None = None) -> di
     plot_scenario_comparison(runs,"objective", save_to=out / "scenarios_surplus.png")
     return runs
 
-def q3fScenarios(question: str, out: Path) -> dict[str, Results]:
-    """scenarios for sensitivy analysis for question 3.f"""
-    base = load_question(question)
-    scenarios = {
-            "base" : base,
-            "lower daily minimum load - 22" : set_load_preferences(base, min_daily_energy_kWh = 22),
-            "lower daily minimum load - 23" : set_load_preferences(base, min_daily_energy_kWh = 23),
-            "lower daily minimum load - 30" : set_load_preferences(base, min_daily_energy_kWh = 30),
-            "lower daily minimum load - 32" : set_load_preferences(base, min_daily_energy_kWh = 32),
-            "lower daily minimum load - 32.3" : set_load_preferences(base, min_daily_energy_kWh = 32.3),
-            "lower daily minimum load - 35" : set_load_preferences(base, min_daily_energy_kWh = 35),
-            "higher minimum reference load 39.3" : shift_reference_load(base, 7/24),
-            "higher minimum reference load 40" : shift_reference_load(base, 7.7/24),
-            "higher minimum reference load 40.3" : shift_reference_load(base, 8/24),
-            "higher minimum reference load 45" : shift_reference_load(base, 12.7/24)
-    }
-
-    runs: dict[str, Results] = {}
-    for name, data in scenarios.items():
-        results = minimumDailyLoadModel(data, c_Q=1.0).build().solve()
-        results.save(out, tag=name)
-        runs[name] = results
-        print(f"{name:>14}: cost {results.objective:8.2f} DKK | import {results.hourly['import'].sum():5.1f} kWh"
-              f" | export {results.hourly['export'].sum():5.1f} kWh")
-    plot_scenario_comparison(runs, "objective", save_to=out / "scenarios_cost.png")
-    return runs
-
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--question", default="Q1_caseA", choices=list_questions(), help="data case to use")
     parser.add_argument("--scenarios", action="store_true", help="also run the example sensitivity scenarios")
     parser.add_argument("--show", action="store_true", help="open the figures in a window")
-    parser.add_argument("--bus-params",type=str, default=None, help="Alternative bus parameter JSON file") # allows to set "alternating" or "blocks", for everything besides 2.E.iv dont add the parameter
+    parser.add_argument("--bus-params",type=str, default=None, help="Alternative bus parameter JSON file") # allows to set "alternating" or "blocks". Used for Q2
     
     args = parser.parse_args()
 
