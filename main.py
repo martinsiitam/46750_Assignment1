@@ -18,6 +18,7 @@ from src.data_loader import load_question, list_questions
 from src.model import FlexibleConsumerModel, Results, LinearDiscomfortModel, QuadraticDiscomfortModel, minimumDailyLoadModel, LinkedHoursDiscomfortModel, batteryModel
 from src.plotting import plot_duals, plot_inputs, plot_scenario_comparison, plot_schedule
 from src.scenarios import scale_prices, scale_pv, set_tariffs, set_load_preferences, shift_reference_load
+from src.scenarios import set_fixed_price, set_alternate_prices, set_battery_preferences
 
 RESULTS_DIR = Path(__file__).resolve().parent / "results"
 
@@ -103,6 +104,21 @@ def build_scenario_models(question: str, bus_params: str | None = None):
         for name, input_data in scenarios.items():
             models[name] = minimumDailyLoadModel(input_data, c_Q=1.0).build()
         return models
+    elif question == "Q3_battery":
+        base = load_question(question, bus_params=bus_params)
+        scenarios = {
+                "base" : base,
+                "fixed prices" : set_fixed_price(base, 1.75),
+                "alternating prices 1" : set_alternate_prices(base, 4),
+                "alternating prices 2" : set_alternate_prices(base, 4, startHigh=False),
+                "battery_capacity = 2" : set_battery_preferences(base, battery_capacity_kWh=2.0),
+                "battery_capacity = 6" : set_battery_preferences(base, battery_capacity_kWh=6.0),
+
+        }
+        models = {}
+        for name, input_data in scenarios.items():
+            models[name] = batteryModel(input_data, c_Q=1.0).build()
+        return models
     raise NotImplementedError(f"No model implemented for {question}")
 
 
@@ -186,6 +202,13 @@ def run_scenarios(question: str, out: Path, bus_params: str | None = None) -> di
             f"{'utility [DKK]':>17}"
         )
         print("-" * 87)
+    if question == "Q3_battery":
+        print("\nQuestion 3g - Scenario Analysis")
+        print(
+            f"{'Scenario':<35}"
+            f"{'Objective [DKK]':>18}"
+            f"{'utility [DKK]':>17}"
+        )
     for name, model in sorted(scenario_models.items(), key=lambda x: str(x[0]).lower()): # sorted for easier viewing later
         results = model.solve()
         # results.save(out, tag=name)
@@ -232,6 +255,12 @@ def run_scenarios(question: str, out: Path, bus_params: str | None = None) -> di
                 f"{name:<35}"
                 f"{results.objective:>18.2f}"
                 f"{results.duals["minimum_daily_load"]:>17.2f}"
+                f"{results.meta["financial_breakdown"]["utility_DKK"]:>18.2f}"
+            )
+        if question == "Q3_battery":
+            print(
+                f"{name:<35}"
+                f"{results.objective:>18.2f}"
                 f"{results.meta["financial_breakdown"]["utility_DKK"]:>18.2f}"
             )
     if question == "Q2_linked_hours":

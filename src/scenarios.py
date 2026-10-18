@@ -43,6 +43,24 @@ def shift_prices(data: InputData, delta: float) -> InputData:
     """Add ``delta`` DKK/kWh to every hourly price (changes the mean, keeps the spread)."""
     return replace(data, energy_price=np.clip(data.energy_price + delta, 0.0, None))
 
+def set_fixed_price(data: InputData, price:float) -> InputData:
+    """Sets all the hourly prices to a single price"""
+    return replace(data, energy_price=np.array([price for t in data.hours]))
+
+def set_alternate_prices(data: InputData, price:float, startHigh : bool = True) -> InputData:
+    """Sets alternate high and low prices, with high price = float, and low price = 0.5"""
+    prices = [0.5 for t in data.hours]
+    if startHigh:
+        for t in data.hours:
+            if t % 2 == 0:
+                prices[t] = price
+    else:
+        for t in data.hours:
+            if t % 2 == 1:
+                prices[t] = price
+    return replace(data, energy_price=np.array(prices))
+    
+
 
 def roll_prices(data: InputData, hours: int) -> InputData:
     """Shift the price profile in time by ``hours`` (positive = later). Useful to study the
@@ -78,3 +96,27 @@ def set_load_preferences(
         load_min_kWh=data.load_min_kWh if load_min_kWh is None else load_min_kWh,
         min_daily_energy_kWh=data.min_daily_energy_kWh if min_daily_energy_kWh is None else min_daily_energy_kWh,
     )
+
+def set_battery_preferences(
+    data: InputData,
+    battery_capacity_kWh: float | None = None,
+    battery_max_charge_kW: float | None = None,
+    battery_max_discharge_kW: float | None = None,
+    battery_charging_efficiency: float | None = None,
+    battery_discharging_efficiency: float | None = None,
+    battery_initial_soc_kWh: float | None = None,
+    battery_final_soc_kWh: float | None = None,
+) -> InputData:
+    """Override the characteristics of the battery."""
+    return replace(
+        data,
+        battery_capacity_kWh = data.battery_capacity_kWh if battery_capacity_kWh is None else battery_capacity_kWh,
+        battery_max_charge_kW = data.battery_max_charge_kW if battery_max_charge_kW is None else battery_max_charge_kW,
+        battery_max_discharge_kW = data.battery_max_discharge_kW if battery_max_discharge_kW is None else battery_max_discharge_kW,
+        battery_charging_efficiency = data.battery_charging_efficiency if battery_charging_efficiency is None else battery_charging_efficiency,
+        battery_discharging_efficiency = data.battery_discharging_efficiency if battery_discharging_efficiency is None else battery_discharging_efficiency,
+        battery_initial_soc_kWh = data.battery_initial_soc_kWh if battery_initial_soc_kWh is None else battery_initial_soc_kWh,
+        battery_final_soc_kWh = data.battery_final_soc_kWh if battery_final_soc_kWh is None else battery_final_soc_kWh,
+    )
+
+
