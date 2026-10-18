@@ -23,6 +23,7 @@ Run any of these commands from the project folder:
 | Q2(c) | `python main.py --question Q2_quadratic` | Quadratic discomfort |
 | Q2(e), bonus | `python main.py --question Q2_linked_hours` | Discomfort linked across hours |
 | Q3 | `python main.py --question Q3` | Minimum daily energy requirement |
+| Q3(g) | `python main.py --question Q3_battery` | Battery added |
 
 Base-case runs print the optimal schedule and summary in the terminal. They also save result files and figures (such as `inputs.png`, `schedule.png`, and `duals.png`) under `results/<case>/`.
 
@@ -36,6 +37,8 @@ Add `--scenarios` to run the experiments associated with each question:
 | Q2(c) | `python main.py --question Q2_quadratic --scenarios` | Sweep of quadratic discomfort coefficient `c_Q` |
 | Q2(e) | `python main.py --question Q2_linked_hours --scenarios` | Linear, quadratic, and linked-hours models under alternating/block price profiles |
 | Q3 | `python main.py --question Q3 --scenarios` | Q3 sensitivity analysis |
+| Q3(g) |`python main.py --question Q3_battery --scenarios` | Q3(g) sensitivity analysis |
+
 
 Scenario results are printed as comparison tables in the terminal; generated files are saved in the `results/` directory. **Surplus** is the maximized objective and is not the same as procurement cost.
 
