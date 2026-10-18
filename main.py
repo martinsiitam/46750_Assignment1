@@ -90,7 +90,11 @@ def build_scenario_models(question: str, bus_params: str | None = None):
                 "higher minimum reference load 39.3" : shift_reference_load(base, 7/24),
                 "higher minimum reference load 40" : shift_reference_load(base, 7.7/24),
                 "higher minimum reference load 40.3" : shift_reference_load(base, 8/24),
-                "higher minimum reference load 45" : shift_reference_load(base, 12.7/24)
+                "higher minimum reference load 45" : shift_reference_load(base, 12.7/24),
+                "higher minimum reference load 50" : shift_reference_load(base, 17.7/24),
+                "higher minimum reference load 55" : shift_reference_load(base, 22.7/24),
+                "higher minimum reference load 60" : shift_reference_load(base, 27.7/24),
+                "higher minimum reference load 65" : shift_reference_load(base, 32.7/24)
         }
         models = {}
         for name, input_data in scenarios.items():
@@ -175,8 +179,8 @@ def run_scenarios(question: str, out: Path, bus_params: str | None = None) -> di
         print(
             f"{'Scenario':<35}"
             f"{'Objective [DKK]':>18}"
-            f"{'Import [kWh]':>17}"
-            f"{'Export [kWh]':>17}"
+            f"{'Minimum daily load dual':>11}"
+            f"{'utility [DKK]':>17}"
         )
         print("-" * 87)
     for name, model in sorted(scenario_models.items(), key=lambda x: str(x[0]).lower()): # sorted for easier viewing later
@@ -224,8 +228,8 @@ def run_scenarios(question: str, out: Path, bus_params: str | None = None) -> di
             print(
                 f"{name:<35}"
                 f"{results.objective:>18.2f}"
-                f"{results.hourly['import'].sum():>17.1f}"
-                f"{results.hourly['export'].sum():>17.1f}"
+                f"{results.duals["minimum_daily_load"]:>17.2f}"
+                f"{results.meta["financial_breakdown"]["utility_DKK"]:>18.2f}"
             )
     if question == "Q2_linked_hours":
         print("\nAverage results by price pattern")

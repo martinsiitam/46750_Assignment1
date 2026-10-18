@@ -37,7 +37,7 @@ def scale_reference_load(data: InputData, factor: float) -> InputData:
 
 def shift_reference_load(data: InputData, delta: float) -> InputData:
     """Shifts the reference load by ``delta``."""
-    return replace(data, energy_price=np.clip(data.reference_load + delta, 0.0, None))
+    return replace(data, reference_load=np.clip(data.reference_load + delta, 0.0, None))
 
 def shift_prices(data: InputData, delta: float) -> InputData:
     """Add ``delta`` DKK/kWh to every hourly price (changes the mean, keeps the spread)."""
