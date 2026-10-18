@@ -32,7 +32,6 @@ Add `--scenarios` to run the experiments associated with each question:
 
 | Question | Command | What it runs |
 | --- | --- | --- |
-| Q1 | `python main.py --question Q1_caseA --scenarios` | Comparison of Cases A and B |
 | Q2(b) | `python main.py --question Q2_linear --scenarios` | Sweep of linear discomfort coefficient `c_L` |
 | Q2(c) | `python main.py --question Q2_quadratic --scenarios` | Sweep of quadratic discomfort coefficient `c_Q` |
 | Q2(e) | `python main.py --question Q2_linked_hours --scenarios` | Linear, quadratic, and linked-hours models under alternating/block price profiles |
