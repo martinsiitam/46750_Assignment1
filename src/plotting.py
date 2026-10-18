@@ -62,6 +62,8 @@ def plot_schedule(results: Results, data: InputData, save_to: Path | str | None 
         ax.plot(h, hr["import"] - hr["export"], "k.-", label="net import (+) / export (-)")
     if "reference_load" in hr:
         ax.step(h, hr["reference_load"], where="mid", color="C0", ls=":", label="reference load")
+    if "battery_soc" in hr:
+        ax.plot(h, hr["battery_soc"], ".-", label="battery SoC")
     ax.axhline(0, color="grey", lw=0.8)
     ax.set(xlabel="hour", ylabel="kWh/h", title=f"Optimal schedule - {results.question} (surplus {results.objective:.1f} DKK)")
 
