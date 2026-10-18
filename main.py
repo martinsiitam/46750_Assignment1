@@ -117,6 +117,7 @@ def build_scenario_models(question: str, bus_params: str | None = None):
         }
         models = {}
         for name, input_data in scenarios.items():
+            models[name + " no battery"] = minimumDailyLoadModel(input_data, c_Q=1.0).build()
             models[name] = batteryModel(input_data, c_Q=1.0).build()
         return models
     raise NotImplementedError(f"No model implemented for {question}")
