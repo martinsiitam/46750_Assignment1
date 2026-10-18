@@ -211,7 +211,7 @@ def run_scenarios(question: str, out: Path, bus_params: str | None = None) -> di
         )
     for name, model in sorted(scenario_models.items(), key=lambda x: str(x[0]).lower()): # sorted for easier viewing later
         results = model.solve()
-        # results.save(out, tag=name)
+        results.save(out, tag=name)
         runs[name] = results
         if is_sweep:
             # Financial results
